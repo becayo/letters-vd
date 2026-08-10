@@ -1,0 +1,85 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { db } from '@/db/client';
+import { letters } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+
+const { id } = Astro.params;
+const letterId = parseInt(id!);
+
+if (isNaN(letterId)) {
+  return Astro.redirect('/');
+}
+
+const [letter] = await db.select().from(letters).where(eq(letters.id, letterId));
+
+if (!letter) {
+  return Astro.redirect('/');
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+---
+
+<Layout>
+  <main class="max-w-lg mx-auto px-4 py-10">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-8">
+      <a href="/" class="text-stone-400 hover:text-stone-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <p class="font-['Caveat'] text-stone-400 text-base capitalize">{formatDate(letter.createdAt)}</p>
+      </div>
+    </div>
+
+    <!-- Carta -->
+    <div class="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden relative">
+      <!-- Líneas de papel -->
+      <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+        {Array.from({ length: 28 }, (_, i) => (
+          <div
+            style={`position:absolute;left:0;right:0;top:${(i + 1) * 32 + 24}px;height:1px;background:rgba(0,0,0,0.05)`}
+          ></div>
+        ))}
+      </div>
+
+      <!-- Contenido -->
+      <div class="relative px-6 pt-6 pb-8">
+        <!-- Encabezado De / Para -->
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-stone-100">
+          <div>
+            <p class="font-['Caveat'] text-stone-400 text-base leading-tight">Para</p>
+            <p class="font-['Caveat'] text-stone-700 text-xl leading-tight">{letter.toName}</p>
+          </div>
+          <div class="text-right">
+            <p class="font-['Caveat'] text-stone-400 text-base leading-tight">De</p>
+            <p class="font-['Caveat'] text-stone-700 text-xl leading-tight">{letter.fromName}</p>
+          </div>
+        </div>
+
+        <!-- Cuerpo de la carta -->
+        <div
+          class="font-['Caveat'] text-xl leading-8 whitespace-pre-wrap"
+          style={`color: ${letter.inkColor}`}
+        >
+          {letter.content}
+        </div>
+
+        <!-- Firma con línea decorativa -->
+        <div class="mt-8 pt-4 border-t border-stone-100 flex items-center gap-2">
+          <div class="w-6 h-0.5 rounded-full" style={`background-color: ${letter.inkColor}`}></div>
+          <span class="font-['Caveat'] text-stone-400 text-base">{letter.fromName}</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>

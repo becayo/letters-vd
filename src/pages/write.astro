@@ -1,0 +1,174 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { db } from '@/db/client';
+import { letters } from '@/db/schema';
+
+let error: string | null = null;
+let success = false;
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const fromName = (formData.get('fromName') as string)?.trim();
+  const toName = (formData.get('toName') as string)?.trim();
+  const content = (formData.get('content') as string)?.trim();
+  const inkColor = (formData.get('inkColor') as string) || '#1a1a2e';
+
+  if (!fromName || !toName || !content) {
+    error = 'Por favor completa todos los campos.';
+  } else {
+    await db.insert(letters).values({ fromName, toName, content, inkColor });
+    return Astro.redirect('/');
+  }
+}
+---
+
+<Layout>
+  <main class="max-w-lg mx-auto px-4 py-10">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-8">
+      <a href="/" class="text-stone-400 hover:text-stone-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <h1 class="font-['Lora'] text-2xl font-medium text-stone-800">Nueva carta</h1>
+        <p class="font-['Caveat'] text-stone-400 text-base mt-0.5">Escribe con el corazón</p>
+      </div>
+    </div>
+
+    {error && (
+      <div class="bg-red-50 border border-red-200 text-red-700 font-['Caveat'] text-lg rounded-xl px-4 py-3 mb-6">
+        {error}
+      </div>
+    )}
+
+    <form method="POST" class="space-y-5" id="letter-form">
+      <!-- De / Para -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="font-['Caveat'] text-stone-500 text-lg block mb-1">De</label>
+          <input
+            type="text"
+            name="fromName"
+            placeholder="Tu nombre"
+            maxlength="30"
+            required
+            class="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 font-['Caveat'] text-lg text-stone-700 placeholder-stone-300 focus:outline-none focus:border-stone-400 transition-colors"
+          />
+        </div>
+        <div>
+          <label class="font-['Caveat'] text-stone-500 text-lg block mb-1">Para</label>
+          <input
+            type="text"
+            name="toName"
+            placeholder="Su nombre"
+            maxlength="30"
+            required
+            class="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 font-['Caveat'] text-lg text-stone-700 placeholder-stone-300 focus:outline-none focus:border-stone-400 transition-colors"
+          />
+        </div>
+      </div>
+
+      <!-- Color de tinta -->
+      <div>
+        <label class="font-['Caveat'] text-stone-500 text-lg block mb-2">Color de tinta</label>
+        <div class="flex items-center gap-3 flex-wrap" id="ink-swatches">
+          {[
+            { color: '#1a1a2e', label: 'Noche' },
+            { color: '#1e3a5f', label: 'Azul marino' },
+            { color: '#4a0e0e', label: 'Rojo oscuro' },
+            { color: '#1b4332', label: 'Verde bosque' },
+            { color: '#6b3fa0', label: 'Violeta' },
+            { color: '#7c4f2e', label: 'Sepia' },
+          ].map(({ color, label }) => (
+            <button
+              type="button"
+              data-color={color}
+              title={label}
+              class="ink-swatch w-7 h-7 rounded-full border-2 border-transparent hover:border-stone-400 transition-all focus:outline-none"
+              style={`background-color: ${color}`}
+            ></button>
+          ))}
+          <!-- Custom color picker -->
+          <label title="Color personalizado" class="w-7 h-7 rounded-full border-2 border-dashed border-stone-300 flex items-center justify-center cursor-pointer hover:border-stone-400 transition-colors overflow-hidden">
+            <input type="color" id="custom-ink" class="opacity-0 absolute w-px h-px" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-stone-400">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </label>
+        </div>
+        <input type="hidden" name="inkColor" id="inkColor" value="#1a1a2e" />
+      </div>
+
+      <!-- Área de la carta -->
+      <div class="relative">
+        <label class="font-['Caveat'] text-stone-500 text-lg block mb-2">Carta</label>
+        <div class="relative bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
+          <!-- Líneas de fondo estilo papel -->
+          <div class="absolute inset-0 pointer-events-none" aria-hidden="true" id="paper-lines"></div>
+          <textarea
+            name="content"
+            id="letter-content"
+            rows="14"
+            required
+            placeholder="Querida Valentina:&#10;&#10;Te escribo esta carta..."
+            class="relative w-full bg-transparent px-6 pt-5 pb-5 font-['Caveat'] text-xl leading-8 text-stone-800 placeholder-stone-300 resize-none focus:outline-none z-10"
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Botón enviar -->
+      <button
+        type="submit"
+        class="w-full bg-stone-800 text-amber-50 font-['Caveat'] text-xl py-3 rounded-2xl hover:bg-stone-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+        Enviar carta
+      </button>
+    </form>
+  </main>
+
+  <script>
+    // Color de tinta
+    const swatches = document.querySelectorAll<HTMLButtonElement>('.ink-swatch');
+    const inkInput = document.getElementById('inkColor') as HTMLInputElement;
+    const textarea = document.getElementById('letter-content') as HTMLTextAreaElement;
+    const customInk = document.getElementById('custom-ink') as HTMLInputElement;
+
+    function setInkColor(color: string) {
+      inkInput.value = color;
+      textarea.style.color = color;
+      swatches.forEach(s => s.classList.remove('border-stone-600', 'scale-110'));
+    }
+
+    swatches.forEach(swatch => {
+      swatch.addEventListener('click', () => {
+        const color = swatch.dataset.color!;
+        setInkColor(color);
+        swatch.classList.add('border-stone-600', 'scale-110');
+      });
+    });
+
+    customInk.addEventListener('input', () => {
+      setInkColor(customInk.value);
+    });
+
+    // Activar primer swatch por defecto
+    swatches[0]?.classList.add('border-stone-600', 'scale-110');
+    textarea.style.color = '#1a1a2e';
+
+    // Líneas de papel
+    const paperLines = document.getElementById('paper-lines');
+    if (paperLines) {
+      const lineHeight = 32; // leading-8 = 2rem = 32px
+      let html = '';
+      for (let i = 1; i < 30; i++) {
+        html += `<div style="position:absolute;left:0;right:0;top:${i * lineHeight + 20}px;height:1px;background:rgba(0,0,0,0.05)"></div>`;
+      }
+      paperLines.innerHTML = html;
+    }
+  </script>
+</Layout>
