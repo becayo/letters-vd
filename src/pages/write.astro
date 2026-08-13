@@ -1,10 +1,19 @@
 ---
 import Layout from '@/layouts/Layout.astro';
 import { db } from '@/db/client';
-import { letters } from '@/db/schema';
+import { letters, pushSubscriptions } from '@/db/schema';
+import webpush from 'web-push';
+import { eq } from 'drizzle-orm';
+
+const { setVapidDetails, sendNotification } = webpush;
+
+setVapidDetails(
+  import.meta.env.VAPID_SUBJECT,
+  import.meta.env.VAPID_PUBLIC_KEY,
+  import.meta.env.VAPID_PRIVATE_KEY,
+);
 
 let error: string | null = null;
-let success = false;
 
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
@@ -12,11 +21,40 @@ if (Astro.request.method === 'POST') {
   const toName = (formData.get('toName') as string)?.trim();
   const content = (formData.get('content') as string)?.trim();
   const inkColor = (formData.get('inkColor') as string) || '#1a1a2e';
+  const senderEndpoint = (formData.get('senderEndpoint') as string) || '';
 
   if (!fromName || !toName || !content) {
     error = 'Por favor completa todos los campos.';
   } else {
-    await db.insert(letters).values({ fromName, toName, content, inkColor });
+    const [newLetter] = await db.insert(letters).values({ fromName, toName, content, inkColor }).returning({ id: letters.id });
+
+    // Enviar push notifications a todos los suscriptores, excepto quien escribió la carta
+    const subs = await db.select().from(pushSubscriptions);
+    const payload = JSON.stringify({
+      title: `Has recibido una carta 💌`,
+      body: `${fromName} te ha enviado una carta`,
+      url: `/carta/${newLetter.id}`,
+    });
+    await Promise.allSettled(
+      subs
+        .filter((sub) => sub.endpoint !== senderEndpoint)
+        .map(async (sub) => {
+          try {
+            await sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              payload,
+            );
+          } catch (err: any) {
+            // Si la suscripción ya no es válida (410 Gone) o no existe (404 Not Found), la eliminamos de la BD
+            if (err && (err.statusCode === 410 || err.statusCode === 404)) {
+              await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, sub.endpoint));
+            } else {
+              console.error('Error enviando notificación push:', err);
+            }
+          }
+        }),
+    );
+
     return Astro.redirect('/');
   }
 }
@@ -99,6 +137,7 @@ if (Astro.request.method === 'POST') {
           </label>
         </div>
         <input type="hidden" name="inkColor" id="inkColor" value="#1a1a2e" />
+        <input type="hidden" name="senderEndpoint" id="senderEndpoint" value="" />
       </div>
 
       <!-- Área de la carta -->
@@ -159,6 +198,23 @@ if (Astro.request.method === 'POST') {
     // Activar primer swatch por defecto
     swatches[0]?.classList.add('border-stone-600', 'scale-110');
     textarea.style.color = '#1a1a2e';
+
+    // Poblar el endpoint del suscriptor actual de forma instantánea para excluirlo del push
+    const savedEndpoint = localStorage.getItem('push_endpoint');
+    if (savedEndpoint) {
+      (document.getElementById('senderEndpoint') as HTMLInputElement).value = savedEndpoint;
+    }
+
+    // Como respaldo secundario, consultar el Service Worker cuando esté listo
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(async (reg) => {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          (document.getElementById('senderEndpoint') as HTMLInputElement).value = sub.endpoint;
+          localStorage.setItem('push_endpoint', sub.endpoint);
+        }
+      });
+    }
 
     // Líneas de papel
     const paperLines = document.getElementById('paper-lines');

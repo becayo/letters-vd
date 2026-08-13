@@ -13,14 +13,18 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.10",
     "@astrojs/node": "^8.3.4",
     "@astrojs/tailwind": "^6.0.2",
     "@libsql/client": "^0.17.4",
     "astro": "^4.16.6",
     "drizzle-orm": "^0.45.2",
-    "tailwindcss": "^3.4.19"
+    "tailwindcss": "^3.4.19",
+    "typescript": "^7.0.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.10"
   }
 }

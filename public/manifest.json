@@ -1,0 +1,16 @@
+{
+  "name": "Letters VD",
+  "short_name": "Letters",
+  "description": "Recibe y envía cartas con tinta virtual.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffbeb",
+  "theme_color": "#1c1917",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

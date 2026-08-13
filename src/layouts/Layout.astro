@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Letters VD" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,5 +18,134 @@
   </head>
   <body class="bg-amber-50 min-h-screen">
     <slot />
+
+    <!-- Botón flotante de notificaciones -->
+    <button
+      id="notify-btn"
+      title="Activar notificaciones"
+      class="hidden fixed bottom-5 right-5 z-50 bg-stone-800 text-amber-50 rounded-full w-12 h-12 items-center justify-center shadow-lg hover:bg-stone-700 active:scale-95 transition-all"
+      aria-label="Activar notificaciones"
+    >
+      <svg id="notify-icon-off" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <svg id="notify-icon-on" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </button>
+
+    <!-- Toast de confirmación -->
+    <div
+      id="notify-toast"
+      class="hidden fixed bottom-20 right-5 z-50 bg-stone-800 text-amber-50 text-sm px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0"
+    ></div>
+
+    <script>
+      const VAPID_PUBLIC_KEY = 'BN_Pt9FHBW0GJMWhpn8u5M9oy-Vdj1Ax1EpajVxjknPsvElhsnz3YNdT5JlPdENxMkk3IcfCMtukPnU704-wPMU';
+
+      function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        return new Uint8Array([...rawData].map((c) => c.charCodeAt(0)));
+      }
+
+      async function init() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+        const btn = document.getElementById('notify-btn') as HTMLButtonElement | null;
+        const iconOff = document.getElementById('notify-icon-off') as SVGElement | null;
+        const iconOn = document.getElementById('notify-icon-on') as SVGElement | null;
+        if (!btn || !iconOff || !iconOn) return;
+
+        // Registrar service worker
+        const reg = await navigator.serviceWorker.register('/sw.js');
+
+        const showToast = (message: string) => {
+          const toast = document.getElementById('notify-toast') as HTMLDivElement | null;
+          if (!toast) return;
+          toast.textContent = message;
+          toast.classList.remove('hidden', 'opacity-0');
+          toast.classList.add('opacity-100');
+          setTimeout(() => {
+            toast.classList.remove('opacity-100');
+            toast.classList.add('opacity-0');
+            setTimeout(() => toast.classList.add('hidden'), 300);
+          }, 2500);
+        };
+
+        const updateUI = (subscribed: boolean) => {
+          btn.classList.remove('hidden');
+          btn.classList.add('flex');
+          if (subscribed) {
+            iconOff.classList.add('hidden');
+            iconOn.classList.remove('hidden');
+            btn.title = 'Desactivar notificaciones';
+          } else {
+            iconOff.classList.remove('hidden');
+            iconOn.classList.add('hidden');
+            btn.title = 'Activar notificaciones';
+          }
+        };
+
+        // Estado inicial
+        const existing = await reg.pushManager.getSubscription();
+        updateUI(!!existing);
+        if (existing) {
+          localStorage.setItem('push_endpoint', existing.endpoint);
+        } else {
+          localStorage.removeItem('push_endpoint');
+        }
+
+        btn.addEventListener('click', async () => {
+          const current = await reg.pushManager.getSubscription();
+
+          if (current) {
+            // Desuscribir
+            await current.unsubscribe();
+            await fetch('/api/subscribe', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ endpoint: current.endpoint }),
+            });
+            updateUI(false);
+            localStorage.removeItem('push_endpoint');
+            showToast('🔕 Notificaciones desactivadas');
+          } else {
+            // Suscribir
+            try {
+              const permission = await Notification.requestPermission();
+              if (permission !== 'granted') return;
+
+              const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+              });
+
+              const json = sub.toJSON();
+              await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  endpoint: json.endpoint,
+                  keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+                }),
+              });
+              updateUI(true);
+              if (json.endpoint) {
+                localStorage.setItem('push_endpoint', json.endpoint);
+              }
+              showToast('🔔 Notificaciones activadas');
+            } catch (err) {
+              console.error('Push subscription error:', err);
+            }
+          }
+        });
+      }
+
+      init();
+    </script>
   </body>
 </html>

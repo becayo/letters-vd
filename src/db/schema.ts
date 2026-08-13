@@ -14,3 +14,15 @@ export const letters = sqliteTable('letters', {
 
 export type Letter = typeof letters.$inferSelect;
 export type NewLetter = typeof letters.$inferInsert;
+
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
