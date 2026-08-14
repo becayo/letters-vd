@@ -7,7 +7,15 @@ import { desc } from 'drizzle-orm';
 const allLetters = await db.select().from(letters).orderBy(desc(letters.createdAt));
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('es-ES', {
+  // dateStr está en formato "YYYY-MM-DD HH:mm:ss" (Zona Horaria Santiago, Chile)
+  const parts = dateStr.split(' ')[0].split('-');
+  const year = parseInt(parts[0]);
+  const month = parseInt(parts[1]) - 1; // Mes en JS es base-0
+  const day = parseInt(parts[2]);
+
+  const date = new Date(year, month, day);
+
+  return date.toLocaleDateString('es-CL', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

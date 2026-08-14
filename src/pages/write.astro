@@ -26,7 +26,8 @@ if (Astro.request.method === 'POST') {
   if (!fromName || !toName || !content) {
     error = 'Por favor completa todos los campos.';
   } else {
-    const [newLetter] = await db.insert(letters).values({ fromName, toName, content, inkColor }).returning({ id: letters.id });
+    const createdAt = new Date().toLocaleString("sv-SE", { timeZone: "America/Santiago" });
+    const [newLetter] = await db.insert(letters).values({ fromName, toName, content, inkColor, createdAt }).returning({ id: letters.id });
 
     // Enviar push notifications a todos los suscriptores, excepto quien escribió la carta
     const subs = await db.select().from(pushSubscriptions);
